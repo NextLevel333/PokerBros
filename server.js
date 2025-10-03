@@ -1,12 +1,11 @@
-// server.js — Render-ready Texas Hold’em Poker Server with sqlite3 logging
-// Deps: npm i express socket.io helmet sqlite3 pokersolver @solana/web3.js @solana/spl-token
+// server.js — Render-ready Texas Hold’em Poker Server (logging only, no DB)
+// Deps: npm i express socket.io helmet pokersolver @solana/web3.js @solana/spl-token
 
 const http = require('http');
 const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 const { Server } = require('socket.io');
-const sqlite3 = require('sqlite3').verbose();
 const { Hand } = require('pokersolver');
 
 // ====== CONFIG ======
@@ -35,22 +34,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// ====== DB (sqlite3 for logging) ======
-const db = new sqlite3.Database(path.join(__dirname, 'poker.db'), (err) => {
-  if (err) console.error('DB error:', err.message);
-});
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS game_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts DATETIME DEFAULT CURRENT_TIMESTAMP,
-    event TEXT
-  )`);
-});
+// ====== Logging Helper ======
 function logEvent(e){
-  db.run("INSERT INTO game_log (event) VALUES (?)", [e], (err) => {
-    if (err) console.error('DB log error:', err.message);
-  });
-  io.emit('message', e);
+  console.log(`[GAME LOG] ${e}`); // shows in Render dashboard
+  io.emit('message', e);          // also broadcast to players
 }
 
 // ====== Lazy import Solana packages ======
@@ -75,10 +62,8 @@ let turnIndex = null;
 let turnTimer = null;
 
 // ====== Helpers ======
-// 👉 Here you keep the same helper functions you already had in your extended server.js:
-// buildDeck, shuffle, broadcastPlayers, findFirstEmptySeat, findNextOccupied, advanceAfterAction, 
-// buildSidePots, distributeSidePots, etc.
-// (I didn’t rewrite them here to avoid duplicating all logic, but they plug in the same way.)
+// 👉 Keep your existing poker helpers here (deck building, shuffling, betting logic,
+// side pots, showdown, timers, etc.)
 
 // ====== Socket.io Logic ======
 io.on('connection', (socket) => {
@@ -125,7 +110,7 @@ io.on('connection', (socket) => {
       };
 
       socket.emit('seatAssigned', { seat: seatIdx, shortKey: seats[seatIdx].shortKey, chips: seats[seatIdx].chips });
-      io.emit('message', `${seats[seatIdx].shortKey} sat down.`);
+      logEvent(`${seats[seatIdx].shortKey} sat down.`);
       broadcastPlayers();
     }catch(e){
       console.error(e);
@@ -133,9 +118,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👉 Insert your existing betting, action, showdown, and disconnect handling logic here
+  // 👉 Add your betting/call/fold/raise/showdown events here (reuse your existing logic)
+
+  socket.on('disconnect', ()=> {
+    const idx = seats.findIndex(p => p && p.socketId===socket.id);
+    if (idx!==-1){
+      logEvent(`${seats[idx].shortKey} left.`);
+      seats[idx] = null;
+      broadcastPlayers();
+    }
+  });
 });
 
+// ====== Start Server ======
 server.listen(PORT, () => {
   console.log(`Poker server running on port ${PORT}`);
 });
