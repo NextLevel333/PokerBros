@@ -1,4 +1,4 @@
-// === Poker Server with Countdown and Balance Fix === 
+// === Poker Server with Countdown, Balance Fix, and Duplicate Wallet Protection ===
 const http = require('http');
 const path = require('path');
 const express = require('express');
@@ -61,6 +61,7 @@ function startHand(){
   io.emit('updatePot',pot);
   // TODO: dealing logic here
 }
+
 function endHand(){ 
   gameActive=false; 
   io.emit('gameWaiting'); 
@@ -72,8 +73,15 @@ io.on('connection', socket=>{
   broadcastPlayers(); 
   io.emit('updatePot',pot);
 
+  // === WALLET CONNECT ===
   socket.on('walletConnected', async ({ pubkey })=>{
     try{
+      // 🚫 Prevent duplicate wallet seats
+      if (seats.find(p => p && p.pubkey === pubkey)) {
+        socket.emit('walletRejected',{reason:'Wallet already seated'});
+        return;
+      }
+
       const { web3, spl } = await ensureSolana();
       const conn = new web3.Connection(DEVNET_RPC);
       const owner = new web3.PublicKey(pubkey);
@@ -84,17 +92,28 @@ io.on('connection', socket=>{
       const info = await spl.getAccount(conn,ata).catch(()=>null);
       let rawBal=info?Number(info.amount):0;
       let uiBal=rawBal/Math.pow(10,decimals);
+
       socket.emit('walletVerified',{pubkey,balance:uiBal});
+
       if (TOKEN_GATE_ENABLED && uiBal<REQUIRED_AMOUNT){ 
         socket.emit('walletRejected',{reason:'Insufficient tokens to sit'}); 
         return; 
       }
+
       const seatIdx=findFirstEmptySeat();
       if (seatIdx===-1){ 
         socket.emit('walletRejected',{reason:'Table full'}); 
         return; 
       }
-      seats[seatIdx]={socketId:socket.id,pubkey,shortKey:'…'+pubkey.slice(-4),chips:uiBal,seatIndex:seatIdx};
+
+      seats[seatIdx]={
+        socketId:socket.id,
+        pubkey,
+        shortKey:'…'+pubkey.slice(-4),
+        chips:uiBal,
+        seatIndex:seatIdx
+      };
+
       socket.emit('seatAssigned',{seat:seatIdx,shortKey:seats[seatIdx].shortKey,chips:uiBal});
       logEvent(seats[seatIdx].shortKey+" sat down."); 
       broadcastPlayers();
@@ -104,7 +123,7 @@ io.on('connection', socket=>{
     }
   });
 
-  // === FIXED COUNTDOWN HANDLER ===
+  // === START GAME WITH COUNTDOWN ===
   socket.on('startGame', ()=>{
     const active=seats.filter(Boolean).length;
     if (active<2){ 
@@ -119,7 +138,7 @@ io.on('connection', socket=>{
         io.emit('countdownTick',{seconds:countdown}); 
       } else {
         clearInterval(timer);
-        io.emit('countdownTick',{seconds:0});   // ✅ send final tick
+        io.emit('countdownTick',{seconds:0});   // ✅ final tick ensures overlay hides
         io.emit('gameStarted');
         logEvent('Match starting now!');
         startHand();
@@ -127,6 +146,7 @@ io.on('connection', socket=>{
     },1000);
   });
 
+  // === LEAVE / DISCONNECT ===
   socket.on('leaveTable', ()=>{
     const idx=seats.findIndex(p=>p&&p.socketId===socket.id);
     if(idx!==-1){ 
@@ -135,6 +155,7 @@ io.on('connection', socket=>{
       broadcastPlayers(); 
     }
   });
+
   socket.on('disconnect', ()=>{
     const idx=seats.findIndex(p=>p&&p.socketId===socket.id);
     if(idx!==-1){ 
