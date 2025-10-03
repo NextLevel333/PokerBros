@@ -10,9 +10,9 @@ const { Hand } = require('pokersolver');
 
 // ====== CONFIG ======
 const PORT = process.env.PORT || 3000;
-const TOKEN_GATE_ENABLED = process.env.TOKEN_GATE_ENABLED === "false" ? false : true;
+const TOKEN_GATE_ENABLED = process.env.TOKEN_GATE_ENABLED === "true" ? false : true;
 const DEVNET_RPC = 'https://api.devnet.solana.com';
-const REQUIRED_TOKEN_MINT_STR = process.env.REQUIRED_TOKEN_MINT || 'Cjx3uYo6qzpcYFoB9hGBjBBa5yWbZyCvRfiHY7Zq7xyA';
+const REQUIRED_TOKEN_MINT_STR = process.env.REQUIRED_TOKEN_MINT || 'DsSMod73mQ51zW1FqXFrrXsZ3nCXAZnrZdyMMpAHSJQk';
 const REQUIRED_AMOUNT = process.env.REQUIRED_AMOUNT ? parseInt(process.env.REQUIRED_AMOUNT) : 100;
 
 const MAX_SEATS = 6;
