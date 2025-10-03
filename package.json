@@ -1,5 +1,5 @@
 {
-  "name": "texas-holdem-starter",
+  "name": "solana-poker",
   "version": "1.0.0",
   "description": "Texas Hold'em Poker on Solana Devnet with token-gating and multiplayer support",
   "main": "server.js",
@@ -10,11 +10,8 @@
     "express": "^4.19.2",
     "socket.io": "^4.7.5",
     "helmet": "^7.1.0",
-    "sqlite3": "^5.1.7",
     "pokersolver": "^2.1.4",
     "@solana/web3.js": "^1.95.3",
     "@solana/spl-token": "^0.4.8"
   }
 }
-
-
