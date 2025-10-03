@@ -105,3 +105,14 @@ button.action:hover{ transform:translateY(-3px); background: rgba(255,255,255,0.
   width: auto;
   display: block;
 }
+#countdownOverlay {
+  background: rgba(0,0,0,0.6);
+  padding: 20px 40px;
+  border-radius: 12px;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.1); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}

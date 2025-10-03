@@ -46,6 +46,33 @@ connectBtn.addEventListener('click', async () => {
   }
 });
 
+// ===== Countdown Overlay =====
+const overlay = document.createElement('div');
+overlay.id = 'countdownOverlay';
+overlay.style.position = 'absolute';
+overlay.style.top = '50%';
+overlay.style.left = '50%';
+overlay.style.transform = 'translate(-50%, -50%)';
+overlay.style.fontSize = '48px';
+overlay.style.fontWeight = 'bold';
+overlay.style.color = 'white';
+overlay.style.textShadow = '0 0 12px black';
+overlay.style.zIndex = '1000';
+overlay.style.display = 'none';
+document.querySelector('.table-container').appendChild(overlay);
+
+socket.on('countdownStart', ({ seconds }) => {
+  overlay.style.display = 'block';
+  overlay.innerText = `Match starts in ${seconds}`;
+});
+
+socket.on('countdownTick', ({ seconds }) => {
+  overlay.innerText = `Match starts in ${seconds}`;
+  if (seconds <= 0) {
+    overlay.style.display = 'none';
+  }
+});
+
 // Seat/players
 socket.on('seatAssigned', data => {
   mySeat = data.seat;
