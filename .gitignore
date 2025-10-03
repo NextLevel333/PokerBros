@@ -1,0 +1,26 @@
+# Node.js dependencies
+/node_modules
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment variables
+.env
+
+# SQLite database (don't push local poker logs)
+*.db
+
+# Certs (not needed on Render — Render gives HTTPS automatically)
+/certs
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
