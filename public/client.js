@@ -17,14 +17,26 @@ function formatShort(num){
   return String(num);
 }
 
-// Phantom connect (always prompt unless auto-approve enabled)
+// ====== Connect / Disconnect Wallet ======
 connectBtn.addEventListener('click', async () => {
+  // If already connected → treat as "disconnect"
+  if (myPubkey) {
+    socket.emit('leaveTable');
+    mySeat = null;
+    myPubkey = null;
+    statusEl.innerText = 'Not connected';
+    connectBtn.innerText = 'Connect Wallet';   // back to connect
+    return;
+  }
+
+  // Otherwise, connect Phantom
   if (window.solana && window.solana.isPhantom){
     try{
       const resp = await window.solana.connect({ onlyIfTrusted: false });
       myPubkey = resp.publicKey.toString();
       const short = myPubkey.slice(0,4)+'...'+myPubkey.slice(-4);
       statusEl.innerText = 'Connected: ' + short;
+      connectBtn.innerText = 'Disconnect';   // change label
       socket.emit('walletConnected', { pubkey: myPubkey });
     }catch(e){
       statusEl.innerText = 'Wallet connection cancelled';
@@ -58,15 +70,15 @@ socket.on('walletVerified', ({ pubkey, balance }) => {
     const short = pubkey.slice(0,4)+'...'+pubkey.slice(-4);
     statusEl.innerText = `Connected: ${short} | Balance: ${formatShort(balance)}`;
     if (balance >= 100){
-      connectBtn.style.display = 'none';
+      connectBtn.innerText = 'Disconnect';   // stay in disconnect mode
     } else {
-      connectBtn.style.display = 'inline-block';
+      connectBtn.innerText = 'Connect Wallet';
     }
   }
 });
 socket.on('walletRejected', ({ reason }) => {
   statusEl.innerText = `Wallet rejected: ${reason}`;
-  connectBtn.style.display = 'inline-block';
+  connectBtn.innerText = 'Connect Wallet';
 });
 
 // Game state
