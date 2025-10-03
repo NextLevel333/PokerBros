@@ -1,4 +1,4 @@
-// === Poker Server with Countdown and Balance Fix ===
+// === Poker Server with Countdown and Balance Fix === 
 const http = require('http');
 const path = require('path');
 const express = require('express');
@@ -28,7 +28,10 @@ async function ensureSolana(){
   return sol;
 }
 
-function logEvent(e){ console.log("[GAME]", e); io.emit('message', e); }
+function logEvent(e){ 
+  console.log("[GAME]", e); 
+  io.emit('message', e); 
+}
 
 let seats = new Array(MAX_SEATS).fill(null);
 let pot = 0;
@@ -37,24 +40,37 @@ let gameActive = false;
 function findFirstEmptySeat(){ return seats.findIndex(p => p===null); }
 function broadcastPlayers(){
   io.emit('playersUpdate', seats.map(p=>p?{pubkey:p.pubkey,shortKey:p.shortKey,chips:p.chips,seatIndex:p.seatIndex}:null));
-  if (seats.every(p=>p===null)){ gameActive=false; io.emit('gameWaiting'); logEvent("Table empty. Game reset."); }
+  if (seats.every(p=>p===null)){ 
+    gameActive=false; 
+    io.emit('gameWaiting'); 
+    logEvent("Table empty. Game reset."); 
+  }
 }
 
 function startHand(){
   if (gameActive) return;
   const active = seats.filter(Boolean);
-  if (active.length<2){ io.emit('message','Need at least 2 players to start'); return; }
+  if (active.length<2){ 
+    io.emit('message','Need at least 2 players to start'); 
+    return; 
+  }
   gameActive = true;
   io.emit('gameStarted');
   logEvent("Hand starting with "+active.length+" players.");
-  pot=0; io.emit('updatePot',pot);
+  pot=0; 
+  io.emit('updatePot',pot);
   // TODO: dealing logic here
 }
-function endHand(){ gameActive=false; io.emit('gameWaiting'); logEvent("Hand ended. Ready for next hand."); }
+function endHand(){ 
+  gameActive=false; 
+  io.emit('gameWaiting'); 
+  logEvent("Hand ended. Ready for next hand."); 
+}
 
 io.on('connection', socket=>{
   socket.emit('message','Spectating. Connect wallet to sit.');
-  broadcastPlayers(); io.emit('updatePot',pot);
+  broadcastPlayers(); 
+  io.emit('updatePot',pot);
 
   socket.on('walletConnected', async ({ pubkey })=>{
     try{
@@ -69,34 +85,63 @@ io.on('connection', socket=>{
       let rawBal=info?Number(info.amount):0;
       let uiBal=rawBal/Math.pow(10,decimals);
       socket.emit('walletVerified',{pubkey,balance:uiBal});
-      if (TOKEN_GATE_ENABLED && uiBal<REQUIRED_AMOUNT){ socket.emit('walletRejected',{reason:'Insufficient tokens to sit'}); return; }
+      if (TOKEN_GATE_ENABLED && uiBal<REQUIRED_AMOUNT){ 
+        socket.emit('walletRejected',{reason:'Insufficient tokens to sit'}); 
+        return; 
+      }
       const seatIdx=findFirstEmptySeat();
-      if (seatIdx===-1){ socket.emit('walletRejected',{reason:'Table full'}); return; }
+      if (seatIdx===-1){ 
+        socket.emit('walletRejected',{reason:'Table full'}); 
+        return; 
+      }
       seats[seatIdx]={socketId:socket.id,pubkey,shortKey:'…'+pubkey.slice(-4),chips:uiBal,seatIndex:seatIdx};
       socket.emit('seatAssigned',{seat:seatIdx,shortKey:seats[seatIdx].shortKey,chips:uiBal});
-      logEvent(seats[seatIdx].shortKey+" sat down."); broadcastPlayers();
-    }catch(e){ console.error(e); socket.emit('walletRejected',{reason:'Validation error'}); }
+      logEvent(seats[seatIdx].shortKey+" sat down."); 
+      broadcastPlayers();
+    }catch(e){ 
+      console.error(e); 
+      socket.emit('walletRejected',{reason:'Validation error'}); 
+    }
   });
 
+  // === FIXED COUNTDOWN HANDLER ===
   socket.on('startGame', ()=>{
     const active=seats.filter(Boolean).length;
-    if (active<2){ socket.emit('message','Need at least 2 players to start'); return; }
+    if (active<2){ 
+      socket.emit('message','Need at least 2 players to start'); 
+      return; 
+    }
     let countdown=10;
     io.emit('countdownStart',{seconds:countdown});
     const timer=setInterval(()=>{
       countdown--;
-      if (countdown>0){ io.emit('countdownTick',{seconds:countdown}); }
-      else { clearInterval(timer); io.emit('gameStarted'); logEvent('Match starting now!'); startHand(); }
+      if (countdown > 0){ 
+        io.emit('countdownTick',{seconds:countdown}); 
+      } else {
+        clearInterval(timer);
+        io.emit('countdownTick',{seconds:0});   // ✅ send final tick
+        io.emit('gameStarted');
+        logEvent('Match starting now!');
+        startHand();
+      }
     },1000);
   });
 
   socket.on('leaveTable', ()=>{
     const idx=seats.findIndex(p=>p&&p.socketId===socket.id);
-    if(idx!==-1){ logEvent(seats[idx].shortKey+" left."); seats[idx]=null; broadcastPlayers(); }
+    if(idx!==-1){ 
+      logEvent(seats[idx].shortKey+" left."); 
+      seats[idx]=null; 
+      broadcastPlayers(); 
+    }
   });
   socket.on('disconnect', ()=>{
     const idx=seats.findIndex(p=>p&&p.socketId===socket.id);
-    if(idx!==-1){ logEvent(seats[idx].shortKey+" disconnected."); seats[idx]=null; broadcastPlayers(); }
+    if(idx!==-1){ 
+      logEvent(seats[idx].shortKey+" disconnected."); 
+      seats[idx]=null; 
+      broadcastPlayers(); 
+    }
   });
 });
 

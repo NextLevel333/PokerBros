@@ -269,3 +269,17 @@ function animateChipToPot(fromSeatIdx){
   });
   setTimeout(()=> chip.remove(), 800);
 }
+// === Countdown Overlay ===
+const overlay = document.getElementById('countdownOverlay');
+
+socket.on('countdownStart', ({ seconds }) => {
+  overlay.innerText = `Match starts in ${seconds}`;
+  overlay.classList.remove('hidden');
+});
+
+socket.on('countdownTick', ({ seconds }) => {
+  overlay.innerText = `Match starts in ${seconds}`;
+  if (seconds <= 0) {
+    overlay.classList.add('hidden'); // hide when game starts
+  }
+});
