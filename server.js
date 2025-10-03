@@ -106,15 +106,6 @@ io.on('connection', (socket) => {
   });
 
   // ====== Disconnect / Free Seat ======
-  socket.on('leaveTable', () => {
-    const idx = seats.findIndex(p => p && p.socketId === socket.id);
-    if (idx !== -1) {
-      logEvent(`${seats[idx].shortKey} left the table.`);
-      seats[idx] = null;
-      broadcastPlayers();
-    }
-  });
-
   socket.on('disconnect', () => {
     const idx = seats.findIndex(p => p && p.socketId === socket.id);
     if (idx !== -1) {
