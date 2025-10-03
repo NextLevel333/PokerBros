@@ -105,26 +105,33 @@ button.action:hover{ transform:translateY(-3px); background: rgba(255,255,255,0.
   width: auto;
   display: block;
 }
+
 #countdownOverlay {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: clamp(28px, 6vw, 64px);
-  font-weight: 800;
-  color: gold;
-  text-shadow: 0 0 20px rgba(0,0,0,.9);
-  background: rgba(0,0,0,0.65);
-  padding: 20px 40px;
-  border-radius: 14px;
+  top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 2000;
+  font-size: clamp(28px, 6vw, 60px);
+  color: var(--accent);
+  font-weight: bold;
+  text-shadow: 0 0 20px black;
+}
+
+#countdownOverlay.hidden {
+  display: none;
+}
+
+#countdownText {
   animation: pulse 1s infinite;
 }
-.hidden {
-  display: none !important;
-}
+
 @keyframes pulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.1); }
+  0% { transform: scale(1); opacity:1; }
+  50% { transform: scale(1.2); opacity:0.8; }
+  100% { transform: scale(1); opacity:1; }
 }
+
 

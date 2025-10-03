@@ -127,6 +127,24 @@ socket.on('countdownTick', ({ seconds }) => {
   }
 });
 
+// === Countdown Overlay ===
+const countdownOverlay = document.getElementById('countdownOverlay');
+const countdownText = document.getElementById('countdownText');
+
+socket.on('countdownStart', ({seconds})=>{
+  countdownOverlay.classList.remove('hidden');
+  countdownText.innerText = "Match starts in " + seconds;
+});
+
+socket.on('countdownTick', ({seconds})=>{
+  if (seconds > 0){
+    countdownText.innerText = "Match starts in " + seconds;
+  } else {
+    countdownOverlay.classList.add('hidden');
+  }
+});
+
+
 // === Buttons ===
 document.getElementById('startBtn').addEventListener('click', ()=> socket.emit('startGame'));
 document.getElementById('checkBtn').addEventListener('click', ()=> socket.emit('action', { type:'check' }));
