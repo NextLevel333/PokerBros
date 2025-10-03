@@ -36,14 +36,23 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 // ====== DB (for logging events) ======
-const db = new Database(path.join(__dirname, 'poker.db'));
-db.pragma('journal_mode = WAL');
-db.exec(`CREATE TABLE IF NOT EXISTS game_log (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  ts DATETIME DEFAULT CURRENT_TIMESTAMP,
-  event TEXT
-);`);
-function logEvent(e){ try{ db.prepare('INSERT INTO game_log (event) VALUES (?)').run(e); } catch{} io.emit('message', e); }
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database(path.join(__dirname, 'poker.db'), (err) => {
+  if (err) console.error('DB error:', err.message);
+});
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS game_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts DATETIME DEFAULT CURRENT_TIMESTAMP,
+    event TEXT
+  )`);
+});
+function logEvent(e){
+  db.run("INSERT INTO game_log (event) VALUES (?)", [e], (err) => {
+    if (err) console.error('DB log error:', err.message);
+  });
+  io.emit('message', e);
+}
 
 // ====== Lazy import Solana packages ======
 let sol = null;
