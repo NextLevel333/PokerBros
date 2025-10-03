@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: solana-poker
+    env: node
+    buildCommand: "npm install"
+    startCommand: "node server.js"
+    plan: free
+    envVars:
+      - key: TOKEN_GATE_ENABLED
+        value: "true"
+      - key: REQUIRED_TOKEN_MINT
+        value: "Cjx3uYo6qzpcYFoB9hGBjBBa5yWbZyCvRfiHY7Zq7xyA"
+      - key: REQUIRED_AMOUNT
+        value: "100"
