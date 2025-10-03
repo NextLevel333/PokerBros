@@ -1,4 +1,4 @@
-// client.js — Phantom connect + progress-bar countdown + short formats + animations
+// client.js — Phantom connect + Disconnect + Countdown + Gameplay UI
 
 const socket = io({ transports: ['websocket'] });
 
@@ -10,70 +10,45 @@ let myPubkey = null;
 
 const statusEl = document.getElementById('walletStatus');
 const connectBtn = document.getElementById('connectWallet');
+const overlay = document.getElementById('countdownOverlay');
 
+// === Utility for short numbers ===
 function formatShort(num){
   if (num >= 1_000_000) return (num/1_000_000).toFixed(2).replace(/\.00$/,'')+'m';
   if (num >= 1_000) return (num/1_000).toFixed(2).replace(/\.00$/,'')+'k';
   return String(num);
 }
 
-// ====== Connect / Disconnect Wallet ======
+// === Connect / Disconnect Wallet ===
 connectBtn.addEventListener('click', async () => {
-  // If already connected → treat as "disconnect"
   if (myPubkey) {
+    // Disconnect
     socket.emit('leaveTable');
     mySeat = null;
     myPubkey = null;
     statusEl.innerText = 'Not connected';
-    connectBtn.innerText = 'Connect Wallet';   // back to connect
+    connectBtn.innerText = 'Connect Wallet';
     return;
   }
 
-  // Otherwise, connect Phantom
-  if (window.solana && window.solana.isPhantom){
-    try{
+  // Connect
+  if (window.solana && window.solana.isPhantom) {
+    try {
       const resp = await window.solana.connect({ onlyIfTrusted: false });
       myPubkey = resp.publicKey.toString();
       const short = myPubkey.slice(0,4)+'...'+myPubkey.slice(-4);
       statusEl.innerText = 'Connected: ' + short;
-      connectBtn.innerText = 'Disconnect';   // change label
+      connectBtn.innerText = 'Disconnect';
       socket.emit('walletConnected', { pubkey: myPubkey });
-    }catch(e){
+    } catch (e) {
       statusEl.innerText = 'Wallet connection cancelled';
     }
-  }else{
+  } else {
     alert('Phantom wallet not found. Please install Phantom.');
   }
 });
 
-// ===== Countdown Overlay =====
-const overlay = document.createElement('div');
-overlay.id = 'countdownOverlay';
-overlay.style.position = 'absolute';
-overlay.style.top = '50%';
-overlay.style.left = '50%';
-overlay.style.transform = 'translate(-50%, -50%)';
-overlay.style.fontSize = '48px';
-overlay.style.fontWeight = 'bold';
-overlay.style.color = 'white';
-overlay.style.textShadow = '0 0 12px black';
-overlay.style.zIndex = '1000';
-overlay.style.display = 'none';
-document.querySelector('.table-container').appendChild(overlay);
-
-socket.on('countdownStart', ({ seconds }) => {
-  overlay.style.display = 'block';
-  overlay.innerText = `Match starts in ${seconds}`;
-});
-
-socket.on('countdownTick', ({ seconds }) => {
-  overlay.innerText = `Match starts in ${seconds}`;
-  if (seconds <= 0) {
-    overlay.style.display = 'none';
-  }
-});
-
-// Seat/players
+// === Player seats ===
 socket.on('seatAssigned', data => {
   mySeat = data.seat;
   const seatEl = document.getElementById('player'+mySeat);
@@ -85,19 +60,23 @@ socket.on('playersUpdate', players => {
     const nameEl = document.querySelector('#player'+idx+' .player-name');
     const chipsEl = document.getElementById('chips'+idx);
     if (!nameEl || !chipsEl) return;
-    if (!p){ nameEl.innerText='(…----)'; chipsEl.innerText='0'; return; }
+    if (!p) { 
+      nameEl.innerText='(…----)'; 
+      chipsEl.innerText='0'; 
+      return; 
+    }
     nameEl.innerText = p.shortKey || '(…----)';
     chipsEl.innerText = formatShort(p.chips || 0);
   });
 });
 
-// Wallet verification result
+// === Wallet verify/reject ===
 socket.on('walletVerified', ({ pubkey, balance }) => {
   if (myPubkey && pubkey === myPubkey){
     const short = pubkey.slice(0,4)+'...'+pubkey.slice(-4);
     statusEl.innerText = `Connected: ${short} | Balance: ${formatShort(balance)}`;
     if (balance >= 100){
-      connectBtn.innerText = 'Disconnect';   // stay in disconnect mode
+      connectBtn.innerText = 'Disconnect';
     } else {
       connectBtn.innerText = 'Connect Wallet';
     }
@@ -108,18 +87,18 @@ socket.on('walletRejected', ({ reason }) => {
   connectBtn.innerText = 'Connect Wallet';
 });
 
-// Game state
+// === Game events ===
 socket.on('dealPrivate', hand => { if (mySeat!==null) renderPlayerCards(mySeat, hand); });
 socket.on('dealHidden', ({ playerId }) => { if (playerId !== mySeat) renderHiddenCards(playerId); });
 socket.on('reveal', ({ playerId, hand }) => renderPlayerCards(playerId, hand));
 socket.on('dealCommunity', cards => renderCommunity(cards));
 socket.on('updatePot', p => { document.getElementById('pot').innerText = 'Pot: ' + formatShort(p); });
 socket.on('bettingRound', data => { currentBet = data.currentBet; updateControls(); });
-socket.on('gameStarted', () => { document.getElementById('startBtn').classList.add('hidden'); });
+socket.on('gameStarted', () => { document.getElementById('startBtn').classList.add('hidden'); overlay.classList.add('hidden'); });
 socket.on('gameWaiting', () => { document.getElementById('startBtn').classList.remove('hidden'); });
 socket.on('message', msg => { /* optional log */ });
 
-// Dealer/turn + countdown
+// === Dealer / Turn ===
 socket.on('dealer', ({ dealer, small, big }) => {
   clearDealerHighlights();
   badge(dealer, 'D'); badge(small, 'SB'); badge(big, 'BB');
@@ -136,7 +115,19 @@ socket.on('actionBroadcast', ({ type, seat, amount }) => {
   if (amount && amount>0) animateChipToPot(seat);
 });
 
-// Buttons
+// === Countdown Overlay ===
+socket.on('countdownStart', ({ seconds }) => {
+  overlay.innerText = `Match starts in ${seconds}`;
+  overlay.classList.remove('hidden');
+});
+socket.on('countdownTick', ({ seconds }) => {
+  overlay.innerText = `Match starts in ${seconds}`;
+  if (seconds <= 0) {
+    overlay.classList.add('hidden');
+  }
+});
+
+// === Buttons ===
 document.getElementById('startBtn').addEventListener('click', ()=> socket.emit('startGame'));
 document.getElementById('checkBtn').addEventListener('click', ()=> socket.emit('action', { type:'check' }));
 document.getElementById('callBtn').addEventListener('click', ()=> socket.emit('action', { type:'call' }));
@@ -170,7 +161,7 @@ function updateControls(){
   if(currentBet===0) show('checkBtn','betBtn','foldBtn'); else show('callBtn','raiseBtn','foldBtn');
 }
 
-// ====== Cards (SVG) ======
+// === Cards (SVG) ===
 function createCardSVG(card){
   const rank=card.slice(0,-1), suit=card.slice(-1);
   const color=(suit==='♥'||suit==='♦')?'#d22':'#111';
@@ -193,7 +184,7 @@ function renderPlayerCards(playerId,cards){ const c=document.getElementById('car
 function renderHiddenCards(playerId){ const c=document.getElementById('cards'+playerId); if(!c) return; c.innerHTML=''; c.appendChild(createCardBackSVG()); c.appendChild(createCardBackSVG()); }
 function renderCommunity(cards){ const c=document.getElementById('community'); c.innerHTML=''; cards.forEach(card=>{ const el=createCardSVG(card); el.classList.add('deal-anim'); c.appendChild(el); }); }
 
-// ====== Dealer/Turn UI ======
+// === Dealer / Turn UI ===
 function clearDealerHighlights(){
   for(let i=0;i<6;i++){
     const el=document.getElementById('player'+i);
@@ -206,7 +197,7 @@ function indicateTurn(idx){
   const el=document.getElementById('player'+idx); if(el) el.classList.add('toAct');
 }
 
-// ===== Progress bar countdown =====
+// === Progress bar countdown ===
 let barRAF = null;
 let barEnd = 0;
 let barSeat = null;
@@ -251,7 +242,7 @@ function stopBar(seatIdx){
   if (wrap) { wrap.remove(); }
 }
 
-// Chip animation
+// === Chip animation ===
 function animateChipToPot(fromSeatIdx){
   const seatEl=document.getElementById('player'+fromSeatIdx);
   const potEl=document.getElementById('pot');
@@ -269,17 +260,3 @@ function animateChipToPot(fromSeatIdx){
   });
   setTimeout(()=> chip.remove(), 800);
 }
-// === Countdown Overlay ===
-const overlay = document.getElementById('countdownOverlay');
-
-socket.on('countdownStart', ({ seconds }) => {
-  overlay.innerText = `Match starts in ${seconds}`;
-  overlay.classList.remove('hidden');
-});
-
-socket.on('countdownTick', ({ seconds }) => {
-  overlay.innerText = `Match starts in ${seconds}`;
-  if (seconds <= 0) {
-    overlay.classList.add('hidden'); // hide when game starts
-  }
-});
