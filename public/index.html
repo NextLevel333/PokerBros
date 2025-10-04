@@ -9,15 +9,14 @@
 <body>
   <div class="app">
     <header>
-  <div class="brand">
-    <img src="logo_words.png" alt="Poker Logo" class="logo">
-  </div>
-  <div id="wallet-controls">
-    <button id="connectWallet" class="btn-primary">Connect Wallet</button>
-    <div id="walletStatus">Not connected</div>
-  </div>
-</header>
-
+      <div class="brand">
+        <img src="logo_words.png" alt="Poker Logo" class="logo">
+      </div>
+      <div id="wallet-controls">
+        <button id="connectWallet" class="btn-primary">Connect Wallet</button>
+        <div id="walletStatus">Not connected</div>
+      </div>
+    </header>
 
     <main class="table-wrap">
       <div class="table-container">
@@ -83,15 +82,13 @@
     </main>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="client.js"></script>
   <!-- Countdown Overlay -->
-<div id="countdownOverlay" class="hidden"></div>
-<!-- Countdown Overlay -->
 <div id="countdownOverlay" class="hidden">
-  <div id="countdownText">Match starts in 10</div>
+  <span id="countdownText">Match starts in 10</span>
 </div>
 
 
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
 </body>
 </html>

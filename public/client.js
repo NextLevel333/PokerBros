@@ -10,7 +10,8 @@ let myPubkey = null;
 
 const statusEl = document.getElementById('walletStatus');
 const connectBtn = document.getElementById('connectWallet');
-const overlay = document.getElementById('countdownOverlay');
+const countdownOverlay = document.getElementById('countdownOverlay');
+const countdownText = document.getElementById('countdownText');
 
 // === Utility for short numbers ===
 function formatShort(num){
@@ -94,7 +95,10 @@ socket.on('reveal', ({ playerId, hand }) => renderPlayerCards(playerId, hand));
 socket.on('dealCommunity', cards => renderCommunity(cards));
 socket.on('updatePot', p => { document.getElementById('pot').innerText = 'Pot: ' + formatShort(p); });
 socket.on('bettingRound', data => { currentBet = data.currentBet; updateControls(); });
-socket.on('gameStarted', () => { document.getElementById('startBtn').classList.add('hidden'); overlay.classList.add('hidden'); });
+socket.on('gameStarted', () => { 
+  document.getElementById('startBtn').classList.add('hidden'); 
+  countdownOverlay.classList.add('hidden'); 
+});
 socket.on('gameWaiting', () => { document.getElementById('startBtn').classList.remove('hidden'); });
 socket.on('message', msg => { /* optional log */ });
 
@@ -117,33 +121,16 @@ socket.on('actionBroadcast', ({ type, seat, amount }) => {
 
 // === Countdown Overlay ===
 socket.on('countdownStart', ({ seconds }) => {
-  overlay.innerText = `Match starts in ${seconds}`;
-  overlay.classList.remove('hidden');
-});
-socket.on('countdownTick', ({ seconds }) => {
-  overlay.innerText = `Match starts in ${seconds}`;
-  if (seconds <= 0) {
-    overlay.classList.add('hidden');
-  }
-});
-
-// === Countdown Overlay ===
-const countdownOverlay = document.getElementById('countdownOverlay');
-const countdownText = document.getElementById('countdownText');
-
-socket.on('countdownStart', ({seconds})=>{
   countdownOverlay.classList.remove('hidden');
   countdownText.innerText = "Match starts in " + seconds;
 });
-
-socket.on('countdownTick', ({seconds})=>{
+socket.on('countdownTick', ({ seconds }) => {
   if (seconds > 0){
     countdownText.innerText = "Match starts in " + seconds;
   } else {
     countdownOverlay.classList.add('hidden');
   }
 });
-
 
 // === Buttons ===
 document.getElementById('startBtn').addEventListener('click', ()=> socket.emit('startGame'));
@@ -172,6 +159,7 @@ confirmBet.addEventListener('click', ()=>{
 });
 cancelBet.addEventListener('click', ()=> betControls.classList.add('hidden'));
 
+// === Controls ===
 function hideAll(){ ['checkBtn','betBtn','callBtn','raiseBtn','foldBtn'].forEach(id=>document.getElementById(id).classList.add('hidden')); }
 function show(...ids){ ids.forEach(id=>document.getElementById(id).classList.remove('hidden')); }
 function updateControls(){
