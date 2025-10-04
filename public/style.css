@@ -33,7 +33,7 @@ header{ display:flex; align-items:center; justify-content:space-between; margin:
 .poker-table{
   position:absolute; inset:0;
   border-radius: 50%/52%;
-  background: radial-gradient(60% 60% at 50% 50%, #004d00, #002d00);
+  background: url('table.png') no-repeat center/cover;
   box-shadow: 0 20px 40px rgba(0,0,0,0.7), inset 0 0 60px rgba(0,0,0,0.6);
   border: 8px solid rgba(0,0,0,0.7);
 }
