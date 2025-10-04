@@ -12,15 +12,14 @@ const PORT = process.env.PORT || 3000;
 const MAX_SEATS = 6;
 const SMALL_BLIND = 5;
 const BIG_BLIND = 10;
-const MIN_BUYIN = 1000; // if you want to enforce later
-const TURN_TIME_MS = 17000; // per action, auto-fold on timeout
-const COUNTDOWN_SECONDS = 10;
+const TURN_TIME_MS = 17000;       // per action, auto-fold on timeout
+const COUNTDOWN_SECONDS = 10;     // pre-hand countdown
 
 // ====== TOKEN GATE CONFIG (Devnet) ======
 const TOKEN_GATE_ENABLED = true;
 const DEVNET_RPC = 'https://api.devnet.solana.com';
 const REQUIRED_TOKEN_MINT_STR = 'DsSMod73mQ51zW1FqXFrrXsZ3nCXAZnrZdyMMpAHSJQk';
-const REQUIRED_AMOUNT = 100; // ui units
+const REQUIRED_AMOUNT = 100; // UI units (post-decimals)
 
 // ====== SERVER BOOT ======
 const app = express();
@@ -42,31 +41,28 @@ async function ensureSolana(){
 function logEvent(e){ console.log('[GAME]', e); io.emit('message', e); }
 
 // ====== TABLE STATE ======
-let seats = new Array(MAX_SEATS).fill(null); // { socketId, pubkey, shortKey, chips, seatIndex, inHand, allIn, holeCards:[] }
+let seats = new Array(MAX_SEATS).fill(null); // { socketId, pubkey, shortKey, chips, seatIndex, flags..., holeCards:[] }
 let deck = [];
 let board = [];
-let pot = 0;
 let dealerIdx = null;
 let smallBlindIdx = null;
 let bigBlindIdx = null;
 
+let pots = [];           // [{amount, eligibles:Set<idx>}]
 let gameActive = false;
 let countdownInProgress = false;
 
-let currentToActIdx = null; // seat index
-let currentBet = 0;         // amount to call this street
-let lastAggressor = null;   // closes action
-let street = null;          // 'preflop' | 'flop' | 'turn' | 'river' | 'showdown'
+let street = null;       // 'preflop'|'flop'|'turn'|'river'|'showdown'
+let currentToActIdx = null;
+let currentBet = 0;      // highest committedThisStreet among active players
+let lastRaiseSize = 0;   // last raise size on this street (for min-raise rule)
 let actionTimer = null;
-
-// Side pot structure: [{ cap: number|null, amount: number, eligibles: Set<seatIdx> }]
-let pots = [];
 
 // ====== HELPERS ======
 function findFirstEmptySeat(){ return seats.findIndex(p => p===null); }
 function seatedIdxList(){ return seats.map((p,i)=>p? i : -1).filter(i=>i>=0); }
-function activeIdxList(){ return seats.map((p,i)=>p&&p.inHand&&!p.allIn? i:-1).filter(i=>i>=0); }
-function inHandIdxList(){ return seats.map((p,i)=>p&&p.inHand? i:-1).filter(i=>i>=0); }
+function inHandIdxList(){ return seats.map((p,i)=>p&&p.inHand&&!p.folded? i:-1).filter(i=>i>=0); }
+function activeIdxList(){ return seats.map((p,i)=>p&&p.inHand&&!p.folded&&!p.allIn? i:-1).filter(i=>i>=0); }
 
 function nextSeat(fromIdx){
   for (let k=1;k<=MAX_SEATS;k++){
@@ -79,14 +75,17 @@ function nextActive(fromIdx){
   for (let k=1;k<=MAX_SEATS;k++){
     const idx = (fromIdx + k) % MAX_SEATS;
     const p = seats[idx];
-    if (p && p.inHand && !p.allIn) return idx;
+    if (p && p.inHand && !p.folded && !p.allIn) return idx;
   }
   return null;
 }
 
 function broadcastPlayers(){
   io.emit('playersUpdate', seats.map(p=>p?{
-    pubkey:p.pubkey, shortKey:p.shortKey, chips:Math.max(0, Math.floor(p.chips)), seatIndex:p.seatIndex
+    pubkey:p.pubkey,
+    shortKey:p.shortKey,
+    chips:Math.max(0, Math.floor(p.chips)),
+    seatIndex:p.seatIndex
   }:null));
   if (seats.every(p=>p===null)){
     resetTable();
@@ -94,19 +93,18 @@ function broadcastPlayers(){
     logEvent('Table empty. Game reset.');
   }
 }
-function formatShort(n){ return n; } // keep raw server values; client pretty-prints
 
 function resetTable(){
-  deck=[]; board=[]; pot=0; pots=[];
-  currentToActIdx=null; currentBet=0; lastAggressor=null; street=null;
-  clearTurnTimer();
+  deck=[]; board=[]; pots=[];
   gameActive=false; countdownInProgress=false;
-  seats.forEach(p=>{ if(p){ p.inHand=false; p.allIn=false; p.holeCards=[]; }});
-  io.emit('updatePot', pot);
+  street=null; currentToActIdx=null; currentBet=0; lastRaiseSize=0;
+  clearTurnTimer();
+  seats.forEach(p=>{ if(p){ p.inHand=false; p.folded=false; p.allIn=false; p.holeCards=[]; p.totalCommitted=0; p.committedThisStreet=0; }});
+  io.emit('updatePot', 0);
 }
 
 function createDeck(){
-  const suits = ['s','h','d','c']; // pokersolver wants 'As', 'Td'
+  const suits = ['s','h','d','c']; // for pokersolver
   const ranks = ['2','3','4','5','6','7','8','9','T','J','Q','K','A'];
   const d=[];
   for(const r of ranks) for(const s of suits) d.push(r+s);
@@ -120,47 +118,16 @@ function shuffle(d){
   return d;
 }
 
-// ====== POTS / BETTING ======
-function initPots(){
-  pots = [{ cap: null, amount: 0, eligibles: new Set(inHandIdxList()) }];
+function convertToClientCards(hole){
+  // client expects ♥♦♣♠; we store s/h/d/c
+  const map = { s:'♠', h:'♥', d:'♦', c:'♣' };
+  return hole.map(c => c[0] + map[c[1]]);
 }
-function totalCommittedThisStreet(){ // (we track via player.bet if needed, but we’ll compute with calls)
-  return currentBet;
-}
-function postBlind(seatIdx, amount){
+function solverCardsFor(seatIdx){
   const p = seats[seatIdx];
-  const pay = Math.min(p.chips, amount);
-  p.chips -= pay;
-  contributeToPots(seatIdx, pay);
-  if (p.chips === 0) p.allIn = true;
-  io.emit('updatePot', potTotal());
-}
-function contributeToPots(seatIdx, amount){
-  // Handle side-pots: push into last pot unless player eligibility or caps require splitting.
-  // For simplicity: add to the last pot if eligible; else create a new pot segment.
-  // (This is a simplified but correct-enough approach for most scenarios)
-  let remaining = amount;
-  while (remaining > 0){
-    let potObj = pots[pots.length-1];
-    if (!potObj.eligibles.has(seatIdx)){
-      // need a new pot tier
-      potObj = { cap: null, amount: 0, eligibles: new Set(inHandIdxList()) };
-      pots.push(potObj);
-    }
-    potObj.amount += remaining;
-    remaining = 0;
-  }
-}
-function potTotal(){ return pots.reduce((a,p)=>a+p.amount,0); }
-
-function allButOneFolded(){
-  const alive = inHandIdxList().filter(i=>!seats[i].folded);
-  return alive.length === 1 ? alive[0] : null;
+  return p.holeCards.concat(board).map(c => c[0] + c[1]); // 'As','Td'
 }
 
-function minRaiseOver(x){ return Math.max(BIG_BLIND, x + (x - (currentBetBeforeRaise || 0))); }
-
-// ====== TURN TIMER ======
 function clearTurnTimer(){
   if (actionTimer){ clearTimeout(actionTimer); actionTimer=null; }
 }
@@ -168,342 +135,360 @@ function startTurnTimer(seatIdx){
   clearTurnTimer();
   io.emit('turn', { playerId: seatIdx, ms: TURN_TIME_MS });
   actionTimer = setTimeout(()=>{
-    // auto-fold on timeout
-    handleAction(seatIdx, { type: 'fold' });
-  }, TURN_TIME_MS + 200); // small buffer
+    // auto-fold
+    handleAction(seatIdx, { type: 'fold' }, true);
+  }, TURN_TIME_MS + 200);
 }
 
-// ====== STREET PROGRESSION ======
-function beginBettingRound(kind){
-  street = kind;
-  currentBet = 0;
-  lastAggressor = null;
-
-  // reset per-street flags
-  inHandIdxList().forEach(i=>{
-    seats[i].committedThisStreet = 0;
-    seats[i].actedThisStreet = false;
-  });
-
-  io.emit('bettingRound', { street, currentBet });
-  // preflop: first to act is left of BB; else left of dealer
-  if (street === 'preflop') {
-    currentToActIdx = nextActive(bigBlindIdx);
+function postToPots(seatIdx, amount){
+  // Simple pot builder: everything goes to main pot; side pots are created on showdown using totalCommitted caps.
+  const last = pots[pots.length-1];
+  if (!last){
+    pots.push({ amount: amount, eligibles: new Set(inHandIdxList()) });
   } else {
-    currentToActIdx = nextActive(dealerIdx);
+    last.amount += amount;
   }
-  if (currentToActIdx == null){
-    // Everyone all-in → skip to next street
-    return advanceStreet();
+  io.emit('updatePot', pots.reduce((a,p)=>a+p.amount,0));
+}
+
+// Build side pots properly from players' total commitments
+function buildSidePotsFromTotals(){
+  const players = inHandIdxList().map(i => ({ i, committed: seats[i].totalCommitted }));
+  if (players.length === 0) return [];
+
+  // Unique ascending commitment levels
+  const levels = [...new Set(players.map(p=>p.committed))].sort((a,b)=>a-b).filter(x=>x>0);
+  if (levels.length === 0) return [];
+
+  const potsOut = [];
+  let prev = 0;
+
+  for (const level of levels){
+    const eligibles = players.filter(p => p.committed >= level).map(p=>p.i);
+    const contributors = players.filter(p => p.committed >= level);
+    const delta = level - prev;
+    const amount = contributors.reduce((sum, p) => sum + delta, 0);
+    potsOut.push({ amount, eligibles: new Set(eligibles) });
+    prev = level;
   }
-  promptAction();
+  return potsOut;
 }
 
-function promptAction(){
-  // Skip folded/all-in players
-  if (!currentToActIdx) currentToActIdx = nextActive(dealerIdx);
-  let safety = 0;
-  while(safety++ < MAX_SEATS){
-    const p = seats[currentToActIdx];
-    if (p && p.inHand && !p.allIn) break;
-    currentToActIdx = nextActive(currentToActIdx);
-    if (currentToActIdx === null) break;
-  }
-  if (currentToActIdx === null){
-    // No one can act → advance street
-    return advanceStreet();
-  }
-
-  io.emit('turn', { playerId: currentToActIdx, ms: TURN_TIME_MS });
-  startTurnTimer(currentToActIdx);
+function allButOneAlive(){
+  const alive = inHandIdxList();
+  return alive.length === 1 ? alive[0] : null;
 }
 
-function everyoneActedAndMatched(){
-  // End of betting round if (1) last aggressor just got called and action returned to him/her,
-  // or (2) only one non-folded player remains, or (3) all remaining players are all-in.
-  const active = activeIdxList();
-  if (active.length <= 1) return true;
-  if (active.every(i => seats[i].actedThisStreet) && active.every(i => seats[i].committedThisStreet === currentBet)) {
-    return true;
-  }
-  if (active.every(i => seats[i].allIn)) return true;
-  return false;
-}
-
-function advanceStreet(){
-  clearTurnTimer();
-  // If everyone (except one) folded, finish immediately
-  const last = allButOneFolded();
-  if (last !== null){
-    // award pot to last
-    awardAllTo([last]);
-    return endHand();
-  }
-
-  if (street === 'preflop'){
-    // FLOP (burn 1, deal 3)
-    deck.pop();
-    board.push(deck.pop(), deck.pop(), deck.pop());
-    io.emit('dealCommunity', board.slice()); // send full board so client renders 3
-    beginBettingRound('flop');
-  } else if (street === 'flop'){
-    // TURN (burn 1, deal 1)
-    deck.pop();
-    board.push(deck.pop());
-    io.emit('dealCommunity', board.slice()); // send 4
-    beginBettingRound('turn');
-  } else if (street === 'turn'){
-    // RIVER (burn 1, deal 1)
-    deck.pop();
-    board.push(deck.pop());
-    io.emit('dealCommunity', board.slice()); // send 5
-    beginBettingRound('river');
-  } else if (street === 'river'){
-    // SHOWDOWN
-    return showdown();
-  } else {
-    // If we land here from "no action possible" (all-in preflop, etc.)
-    if (board.length < 3){
-      deck.pop(); board.push(deck.pop(), deck.pop(), deck.pop()); io.emit('dealCommunity', board.slice());
-    }
-    while (board.length < 5){
-      deck.pop(); board.push(deck.pop()); io.emit('dealCommunity', board.slice());
-    }
-    return showdown();
-  }
-}
-
-// ====== SHOWDOWN & AWARDS ======
-function showdown(){
-  street = 'showdown';
-  clearTurnTimer();
-
-  const elligible = inHandIdxList();
-  // reveal all hands
-  elligible.forEach(i=>{
-    const p = seats[i];
-    io.emit('reveal', { playerId: i, hand: convertToClientCards(p.holeCards) });
-  });
-
-  // Evaluate winners with side pots
-  resolveSidePots(elligible);
-  endHand();
-}
-
-function resolveSidePots(elligible){
-  // Build rank maps: seatIdx -> best hand strength using pokersolver, on each comparison set
-  const makeSolverCards = (hole) => hole.map(h => toSolver(h)).concat(board.map(toSolver));
-  function rankFor(i){ return Hand.solve(makeSolverCards(seats[i].holeCards)); }
-
-  // If no explicit side pot caps built, treat as single main pot
-  if (pots.length === 0) pots = [{ cap: null, amount: pot, eligibles: new Set(elligible) }];
-
-  pots.forEach(potObj=>{
-    const contenders = [...potObj.eligibles].filter(i => elligible.includes(i));
-    if (contenders.length === 0 || potObj.amount <= 0) return;
-
-    // Pick winners
-    const solved = contenders.map(i => ({ i, hand: rankFor(i) }));
-    const best = Hand.winners(solved.map(s => s.hand));
-    const winnerIdxs = solved.filter(s => best.some(b=>b === s.hand)).map(s => s.i);
-
-    const share = Math.floor(potObj.amount / winnerIdxs.length);
-    winnerIdxs.forEach(i => { seats[i].chips += share; });
-
-    io.emit('message', `Winners (${formatShort(share)} each): ${winnerIdxs.map(i=>seats[i].shortKey).join(', ')}`);
-  });
-
-  io.emit('updatePot', 0);
-}
-
-// If only one player remains (everyone else folded)
-function awardAllTo(list){
-  const total = potTotal();
-  list.forEach(i => seats[i].chips += Math.floor(total / list.length));
-  io.emit('updatePot', 0);
-  io.emit('message', `Pot awarded to ${list.map(i=>seats[i].shortKey).join(', ')}`);
-  pots = [];
-}
-
-// ====== CARD CONVERSION (client expects ♥♦♣♠ like earlier; we used s/h/d/c internally) ======
-function convertToClientCards(hole){
-  return hole.map(c => {
-    const r = c[0];
-    const s = c[1];
-    const suitMap = { s:'♠', h:'♥', d:'♦', c:'♣' };
-    return r + suitMap[s];
-  });
-}
-function toSolver(card){ // 'As', 'Td', etc. already in poker format
-  return card[0] + card[1];
-}
-
-// ====== DEALING START OF HAND ======
+// ====== HAND FLOW ======
 function startHand(){
-  resetHandFlags();
-  const alive = seatedIdxList();
-  if (alive.length < 2){ io.emit('message','Need at least 2 players'); return; }
+  // Require at least 2 seated
+  const seated = seatedIdxList();
+  if (seated.length < 2){ io.emit('message','Need at least 2 players'); return; }
 
-  // New deck
+  // New deck & board
   deck = shuffle(createDeck());
   board = [];
   pots = [];
-  pot = 0;
-  io.emit('updatePot', pot);
+  street = null;
+  currentToActIdx = null;
+  currentBet = 0;
+  lastRaiseSize = 0;
 
-  // Setup dealer → SB → BB
+  // Rotate dealer
   if (dealerIdx === null){
-    dealerIdx = alive[0];
+    dealerIdx = seated[0];
   } else {
-    // dealer to next occupied seat
     dealerIdx = nextSeat(dealerIdx);
   }
   smallBlindIdx = nextSeat(dealerIdx);
   bigBlindIdx = nextSeat(smallBlindIdx);
 
-  io.emit('dealer', { dealer: dealerIdx, small: smallBlindIdx, big: bigBlindIdx });
-
-  // Mark players in hand + not all-in
-  alive.forEach(i=>{
+  // Reset players for new hand
+  seated.forEach(i=>{
     const p = seats[i];
-    p.inHand = true;
-    p.allIn = false;
-    p.folded = false;
+    p.inHand = true; p.folded = false; p.allIn = false;
     p.holeCards = [];
+    p.totalCommitted = 0;
     p.committedThisStreet = 0;
   });
 
-  // Blinds
-  initPots();
+  io.emit('dealer', { dealer: dealerIdx, small: smallBlindIdx, big: bigBlindIdx });
+
+  // Post blinds
   postBlind(smallBlindIdx, SMALL_BLIND);
   postBlind(bigBlindIdx, BIG_BLIND);
-  currentBet = BIG_BLIND;
+  currentBet = Math.max(seats[smallBlindIdx].committedThisStreet, seats[bigBlindIdx].committedThisStreet);
+  lastRaiseSize = BIG_BLIND; // base for min-raise preflop
 
-  // Deal hole cards
-  alive.forEach(i=>{
+  // Deal hole cards (private + hidden to others)
+  seated.forEach(i=>{
     const p = seats[i];
     p.holeCards = [ deck.pop(), deck.pop() ];
-    // send private to that player
     io.to(p.socketId).emit('dealPrivate', convertToClientCards(p.holeCards));
-    // send hidden to others
-    alive.forEach(j=>{
+  });
+  // tell everyone else to show backs for each seated player (client will draw backs)
+  seated.forEach(i=>{
+    seated.forEach(j=>{
       if (i===j) return;
-      const q = seats[j];
-      io.to(q.socketId).emit('dealHidden', { playerId: i });
+      io.to(seats[j].socketId).emit('dealHidden', { playerId: i });
     });
   });
 
   gameActive = true;
   io.emit('gameStarted');
-  logEvent(`Hand started. Dealer …${seats[dealerIdx].pubkey.slice(-4)} | SB …${seats[smallBlindIdx].pubkey.slice(-4)} | BB …${seats[bigBlindIdx].pubkey.slice(-4)}`);
+  logEvent(`Hand started. Dealer ${seats[dealerIdx].shortKey}, SB ${seats[smallBlindIdx].shortKey}, BB ${seats[bigBlindIdx].shortKey}`);
 
   beginBettingRound('preflop');
 }
 
-function resetHandFlags(){
+function postBlind(idx, amount){
+  const p = seats[idx];
+  if (!p || !p.inHand || p.folded) return;
+  const pay = Math.min(p.chips, amount);
+  p.chips -= pay;
+  p.committedThisStreet += pay;
+  p.totalCommitted += pay;
+  if (p.chips === 0) p.allIn = true;
+  postToPots(idx, pay);
+  io.emit('actionBroadcast', { type: (idx===smallBlindIdx?'postSB':'postBB'), seat: idx, amount: pay });
+}
+
+function beginBettingRound(kind){
+  street = kind;
+  // reset per-street
+  inHandIdxList().forEach(i=>{
+    seats[i].actedThisStreet = false;
+    seats[i].committedThisStreet = 0; // reset per-street commitments
+  });
+
+  // Re-apply blinds as committedThisStreet for preflop
+  seats[smallBlindIdx] && (seats[smallBlindIdx].committedThisStreet = Math.min(SMALL_BLIND, seats[smallBlindIdx].totalCommitted));
+  seats[bigBlindIdx] && (seats[bigBlindIdx].committedThisStreet = Math.min(BIG_BLIND, seats[bigBlindIdx].totalCommitted));
+
+  // currentBet is max committedThisStreet among active
+  currentBet = inHandIdxList().reduce((m,i)=>Math.max(m, seats[i].committedThisStreet), 0);
+  lastRaiseSize = (street==='preflop') ? BIG_BLIND : 0;
+
+  io.emit('bettingRound', { street, currentBet });
+
+  // first to act: preflop = left of BB; else left of dealer
+  currentToActIdx = (street==='preflop') ? nextActive(bigBlindIdx) : nextActive(dealerIdx);
+
+  // If no one can act (everyone all-in), fast-forward to next streets
+  if (currentToActIdx === null) return advanceStreet();
+  promptAction();
+}
+
+function promptAction(){
+  // Skip folded/all-in
+  let safety=0;
+  while (safety++ < MAX_SEATS){
+    const p = seats[currentToActIdx];
+    if (p && p.inHand && !p.folded && !p.allIn) break;
+    currentToActIdx = nextActive(currentToActIdx);
+    if (currentToActIdx === null) break;
+  }
+  if (currentToActIdx === null) return advanceStreet();
+
+  startTurnTimer(currentToActIdx);
+}
+
+function everyoneActedAndMatched(){
+  const active = activeIdxList();
+  if (active.length <= 1) return true;
+  // All active have acted and all active have committed == currentBet
+  return active.every(i => seats[i].actedThisStreet) &&
+         active.every(i => seats[i].committedThisStreet === currentBet);
+}
+
+function advanceStreet(){
+  clearTurnTimer();
+
+  // If only one alive, award immediately
+  const lone = allButOneAlive();
+  if (lone !== null){
+    // Pay entire pot to the last player
+    const total = pots.reduce((a,p)=>a+p.amount, 0);
+    seats[lone].chips += total;
+    io.emit('updatePot', 0);
+    io.emit('message', `Pot awarded to ${seats[lone].shortKey}`);
+    return endHand();
+  }
+
+  if (street === 'preflop'){
+    // Flop (burn 1, deal 3)
+    deck.pop();
+    board.push(deck.pop(), deck.pop(), deck.pop());
+    io.emit('dealCommunity', convertToClientCards(board));
+    beginBettingRound('flop');
+  } else if (street === 'flop'){
+    // Turn (burn 1, deal 1)
+    deck.pop();
+    board.push(deck.pop());
+    io.emit('dealCommunity', convertToClientCards(board));
+    beginBettingRound('turn');
+  } else if (street === 'turn'){
+    // River (burn 1, deal 1)
+    deck.pop();
+    board.push(deck.pop());
+    io.emit('dealCommunity', convertToClientCards(board));
+    beginBettingRound('river');
+  } else if (street === 'river'){
+    return showdown();
+  } else {
+    // If we came here with nobody able to act (everyone all-in pre), just complete board then showdown
+    while (board.length < 5){
+      if (board.length===0) deck.pop(); // burn before flop
+      board.push(deck.pop());
+      io.emit('dealCommunity', convertToClientCards(board));
+    }
+    return showdown();
+  }
+}
+
+function showdown(){
+  street = 'showdown';
+  clearTurnTimer();
+
+  // Reveal all in-hand players
+  inHandIdxList().forEach(i=>{
+    io.emit('reveal', { playerId: i, hand: convertToClientCards(seats[i].holeCards) });
+  });
+
+  // Build side pots using totalCommitted
+  const sidePots = buildSidePotsFromTotals();
+  if (sidePots.length === 0){
+    // If something odd, fallback to single pot
+    const sum = pots.reduce((a,p)=>a+p.amount,0);
+    sidePots.push({ amount: sum, eligibles: new Set(inHandIdxList()) });
+  }
+
+  // Resolve each pot
+  sidePots.forEach(potObj=>{
+    const contenders = [...potObj.eligibles].filter(i => seats[i] && seats[i].inHand && !seats[i].folded);
+    if (contenders.length === 0 || potObj.amount <= 0) return;
+
+    const solved = contenders.map(i => ({ i, hand: Hand.solve(solverCardsFor(i)) }));
+    const winners = Hand.winners(solved.map(s=>s.hand));
+    const winnerIdxs = solved.filter(s => winners.includes(s.hand)).map(s=>s.i);
+
+    const share = Math.floor(potObj.amount / winnerIdxs.length);
+    winnerIdxs.forEach(i => { seats[i].chips += share; });
+
+    io.emit('message', `Winners (${share} each): ${winnerIdxs.map(i=>seats[i].shortKey).join(', ')}`);
+  });
+
+  io.emit('updatePot', 0);
+  endHand();
+}
+
+function endHand(){
+  gameActive = false;
+  // Clear hand flags
   seats.forEach(p=>{
     if (!p) return;
-    p.inHand = false; p.allIn = false; p.folded=false; p.holeCards=[];
-    p.committedThisStreet = 0;
+    p.inHand=false; p.folded=false; p.allIn=false;
+    p.holeCards=[]; p.committedThisStreet=0; p.totalCommitted=0;
   });
+  pots = [];
+  board = [];
+  io.emit('gameWaiting');
+  logEvent('Hand ended. Ready for next hand.');
 }
 
-// ====== ACTION HANDLING ======
-function legalActionsFor(idx){
+// ====== ACTIONS ======
+function handleAction(idx, action, isTimeout=false){
   const p = seats[idx];
-  if (!p || !p.inHand || p.allIn) return [];
-
-  const toCall = currentBet - p.committedThisStreet;
-  const acts = ['fold'];
-  if (toCall <= 0){
-    acts.push('check');
-    acts.push('bet'); // open bet
-  } else {
-    acts.push('call');
-    acts.push('raise');
-  }
-  return acts;
-}
-
-function handleAction(idx, action){
-  const p = seats[idx];
-  if (!p || idx !== currentToActIdx) return;
-  if (!p.inHand || p.allIn) return;
+  if (!p || !p.inHand || p.folded || p.allIn) return;
+  if (idx !== currentToActIdx && !isTimeout) return; // not your turn
 
   clearTurnTimer();
 
   const toCall = Math.max(0, currentBet - p.committedThisStreet);
 
   if (action.type === 'fold'){
-    p.inHand = false;
+    p.folded = true;
     io.emit('actionBroadcast', { type:'fold', seat: idx });
   }
   else if (action.type === 'check'){
-    if (toCall > 0) return promptAction(); // illegal, ignore
+    if (toCall > 0){ // illegal
+      return promptAction();
+    }
     p.actedThisStreet = true;
     io.emit('actionBroadcast', { type:'check', seat: idx });
   }
   else if (action.type === 'call'){
-    if (toCall <= 0) return promptAction(); // nothing to call
-    const paid = Math.min(p.chips, toCall);
-    p.chips -= paid;
-    p.committedThisStreet += paid;
-    contributeToPots(idx, paid);
-    if (p.chips === 0) p.allIn = true;
-    io.emit('updatePot', potTotal());
-    p.actedThisStreet = true;
-    io.emit('actionBroadcast', { type:'call', seat: idx, amount: paid });
+    if (toCall <= 0){
+      p.actedThisStreet = true;
+      io.emit('actionBroadcast', { type:'check', seat: idx });
+    } else {
+      const pay = Math.min(p.chips, toCall);
+      p.chips -= pay;
+      p.committedThisStreet += pay;
+      p.totalCommitted += pay;
+      if (p.chips === 0) p.allIn = true;
+      postToPots(idx, pay);
+      p.actedThisStreet = true;
+      io.emit('actionBroadcast', { type:'call', seat: idx, amount: pay });
+    }
   }
   else if (action.type === 'bet'){
-    // open bet when no currentBet
-    if (currentBet > 0) return promptAction();
-    const amt = Math.max(BIG_BLIND, Number(action.amount||0));
-    if (amt <= 0) return promptAction();
-
-    const paid = Math.min(p.chips, amt);
-    p.chips -= paid;
-    p.committedThisStreet += paid;
+    if (currentBet > 0) return promptAction(); // can't "bet" when a bet exists; must raise
+    const want = Number(action.amount||0);
+    const minBet = BIG_BLIND;
+    const betAmt = Math.max(minBet, want);
+    const pay = Math.min(p.chips, betAmt);
+    if (pay <= 0) return promptAction();
+    p.chips -= pay;
+    p.committedThisStreet += pay;
+    p.totalCommitted += pay;
     currentBet = p.committedThisStreet;
-    lastAggressor = idx;
-    contributeToPots(idx, paid);
+    lastRaiseSize = currentBet; // opening bet size
     if (p.chips === 0) p.allIn = true;
-    io.emit('updatePot', potTotal());
-    p.actedThisStreet = true;
-    // others must act again
+    postToPots(idx, pay);
+    // reset others' acted flags – new aggression
     inHandIdxList().forEach(i=>seats[i].actedThisStreet=false);
-    io.emit('actionBroadcast', { type:'bet', seat: idx, amount: paid });
+    p.actedThisStreet = true;
+    io.emit('actionBroadcast', { type:'bet', seat: idx, amount: pay });
   }
   else if (action.type === 'raise'){
     if (toCall <= 0) return promptAction();
-    const minRaise = Math.max(currentBet + (currentBet - (p.prevAggBet||0)), currentBet + BIG_BLIND);
-    const want = Math.max(Number(action.amount||0), minRaise);
-    const need = want - p.committedThisStreet;
-    const paid = Math.min(p.chips, need);
-    if (paid <= 0) return promptAction();
-    p.chips -= paid;
-    p.committedThisStreet += paid;
-    currentBet = Math.max(currentBet, p.committedThisStreet);
-    lastAggressor = idx;
-    p.prevAggBet = currentBet;
-    contributeToPots(idx, paid);
+    const want = Number(action.amount||0); // total you want to have in pot this street
+    // Minimum raise: currentBet + lastRaiseSize
+    const minTotal = currentBet + Math.max(lastRaiseSize, BIG_BLIND);
+    const target = Math.max(minTotal, want);
+    const need = target - p.committedThisStreet;
+    const pay = Math.min(p.chips, need);
+    if (pay <= 0) return promptAction();
+    p.chips -= pay;
+    p.committedThisStreet += pay;
+    p.totalCommitted += pay;
+    lastRaiseSize = target - currentBet;  // new raise size
+    currentBet = target;
     if (p.chips === 0) p.allIn = true;
-    io.emit('updatePot', potTotal());
-    // reset acted for others
+    postToPots(idx, pay);
+    // reset others' acted flags – new aggression
     inHandIdxList().forEach(i=>seats[i].actedThisStreet=false);
     p.actedThisStreet = true;
-    io.emit('actionBroadcast', { type:'raise', seat: idx, amount: paid });
+    io.emit('actionBroadcast', { type:'raise', seat: idx, amount: pay });
   }
 
-  // If only one left, award pot
-  const lone = allButOneFolded();
-  if (lone !== null){ awardAllTo([lone]); return endHand(); }
+  // If only one player remains
+  const lone = allButOneAlive();
+  if (lone !== null){
+    const total = pots.reduce((a,p)=>a+p.amount,0);
+    seats[lone].chips += total;
+    io.emit('updatePot', 0);
+    io.emit('message', `Pot awarded to ${seats[lone].shortKey}`);
+    return endHand();
+  }
 
-  // If betting round ended, advance
+  // If round finished, move street
   if (everyoneActedAndMatched()){
     return advanceStreet();
   }
 
-  // Otherwise pass action
+  // Next to act
   currentToActIdx = nextActive(idx);
   if (currentToActIdx === null) return advanceStreet();
   promptAction();
@@ -512,13 +497,13 @@ function handleAction(idx, action){
 // ====== SOCKETS ======
 io.on('connection', socket=>{
   socket.emit('message','Spectating. Connect wallet to sit.');
-  broadcastPlayers(); 
-  io.emit('updatePot', potTotal());
+  broadcastPlayers();
+  io.emit('updatePot', pots.reduce((a,p)=>a+p.amount,0));
 
   // Wallet connect / token gate
   socket.on('walletConnected', async ({ pubkey })=>{
     try{
-      // prevent duplicates
+      // Prevent duplicate wallet
       if (seats.find(p=>p && p.pubkey === pubkey)){
         socket.emit('walletRejected', { reason:'Wallet already seated' });
         return;
@@ -532,7 +517,7 @@ io.on('connection', socket=>{
       const ata = await spl.getAssociatedTokenAddress(mint, owner);
       const info = await spl.getAccount(conn, ata).catch(()=>null);
       const rawBal = info ? Number(info.amount) : 0;
-      const uiBal  = rawBal / Math.pow(10, decimals);
+      const uiBal = rawBal / Math.pow(10, decimals);
 
       socket.emit('walletVerified', { pubkey, balance: uiBal });
       if (TOKEN_GATE_ENABLED && uiBal < REQUIRED_AMOUNT){
@@ -547,16 +532,18 @@ io.on('connection', socket=>{
         socketId: socket.id,
         pubkey,
         shortKey: '…'+pubkey.slice(-4),
-        chips: Math.floor(uiBal), // treat token balance as chips for now
+        chips: Math.floor(uiBal),   // treat balance as play chips
         seatIndex: seatIdx,
         inHand: false,
-        allIn: false,
         folded: false,
+        allIn: false,
+        holeCards: [],
+        totalCommitted: 0,
         committedThisStreet: 0,
-        holeCards: []
+        actedThisStreet: false
       };
       socket.emit('seatAssigned', { seat: seatIdx, shortKey: seats[seatIdx].shortKey, chips: seats[seatIdx].chips });
-      logEvent(seats[seatIdx].shortKey+" sat down."); 
+      logEvent(seats[seatIdx].shortKey+" sat down.");
       broadcastPlayers();
     }catch(e){
       console.error(e);
@@ -566,8 +553,8 @@ io.on('connection', socket=>{
 
   // Start with countdown (guarded)
   socket.on('startGame', ()=>{
-    const activeCount = seatedIdxList().length;
-    if (activeCount < 2){ socket.emit('message','Need at least 2 players to start'); return; }
+    const seatedCount = seatedIdxList().length;
+    if (seatedCount < 2){ socket.emit('message','Need at least 2 players to start'); return; }
     if (gameActive || countdownInProgress){ socket.emit('message','Game already starting or in progress'); return; }
 
     countdownInProgress = true;
