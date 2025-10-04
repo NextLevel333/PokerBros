@@ -35,7 +35,7 @@ header{ display:flex; align-items:center; justify-content:space-between; margin:
   border-radius: 50%/52%;
   background: url('table.png') no-repeat center/cover;
   box-shadow: 0 20px 40px rgba(0,0,0,0.7), inset 0 0 60px rgba(0,0,0,0.6);
-  border: 8px solid rgba(0,0,0,0.7);
+  border: 8px solid rgb(0, 0, 0);
 }
 #community{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); display:flex; gap: clamp(6px, 1.2vw, 12px); z-index:40; }
 .card{ width: clamp(48px, 7vw, 72px); height: clamp(72px, 10.5vw, 108px); border-radius:8px; background:white; display:flex; align-items:center; justify-content:center; box-shadow: 0 6px 10px rgba(0,0,0,0.6); }
