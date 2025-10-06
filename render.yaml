@@ -1,0 +1,17 @@
+# Render Blueprint for PokerBros Online Poker Game
+# This file automates deployment and environment setup on Render.
+
+services:
+  - type: web
+    name: pokerbros
+    env: node
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    envVars:
+      - key: TOKEN_GATE_ENABLED
+        value: false
+      - key: NODE_VERSION
+        value: 18
+    autoDeploy: true
+    region: oregon

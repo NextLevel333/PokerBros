@@ -1,0 +1,284 @@
+:root {
+  --table-w: min(90vw, 820px);
+  --table-h: calc(var(--table-w) * 0.52);
+  --accent: #f5c542;
+  --overlay: rgba(0,0,0,0.45);
+}
+
+html, body { height: 100%; }
+
+body {
+  margin:0;
+  font-family: Inter, Roboto, Arial, sans-serif;
+  background: url('bg_poker.jpg') no-repeat center/cover;
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.app { width: min(98vw, 1100px); margin: 8px auto; }
+
+header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin: 6px 4px 10px;
+  gap: 10px;
+}
+
+.brand h1 {
+  font-size: clamp(16px, 2.4vw, 22px);
+  margin: 0;
+}
+
+#wallet-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px; /* spacing between button and status text */
+}
+
+#walletStatus {
+  font-size: 12px;
+  opacity: 0.9;
+  text-align: center;
+}
+
+.table-wrap { position:relative; }
+
+.table-container {
+  position:relative;
+  width:var(--table-w);
+  height:var(--table-h);
+  margin:0 auto;
+}
+
+.poker-table {
+  position:absolute;
+  inset:0;
+  border-radius: 50%/52%;
+  background: url('table.png') no-repeat center/cover;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.7),
+              inset 0 0 60px rgba(0,0,0,0.6);
+  border: 8px solid rgb(0, 0, 0);
+}
+
+#community {
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  display:flex;
+  gap: clamp(6px, 1.2vw, 12px);
+  z-index:40;
+}
+
+.card {
+  width: clamp(48px, 7vw, 72px);
+  height: clamp(72px, 10.5vw, 108px);
+  border-radius:8px;
+  background:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow: 0 6px 10px rgba(0,0,0,0.6);
+}
+
+.card.back { background: linear-gradient(135deg,#2b2b90,#1a1a60); }
+
+.player-seat {
+  position:absolute;
+  width: clamp(110px, 18vw, 160px);
+  text-align:center;
+}
+
+.player-name {
+  font-weight:700;
+  margin-bottom:6px;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  font-size: clamp(11px, 1.6vw, 14px);
+}
+
+.player-seat .cards {
+  display:flex;
+  justify-content:center;
+  gap: clamp(4px, 1vw, 8px);
+  margin-bottom:6px;
+}
+
+.chips {
+  color: gold;
+  font-weight:700;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  font-size: clamp(12px, 1.8vw, 15px);
+}
+
+/* Seat positions */
+#player0 { top:-10%; left:50%; transform:translateX(-50%); }
+#player1 { top:5%; left:-6%; }
+#player2 { bottom:15%; left:-6%; }
+#player3 { bottom:-10%; left:50%; transform:translateX(-50%); }
+#player4 { bottom:15%; right:-6%; }
+#player5 { top:5%; right:-6%; }
+
+.me .player-name { color: var(--accent); }
+
+.dealer-badge {
+  margin-top: 4px;
+  font-size: 11px;
+  color:#fff;
+  background: rgba(255,255,255,.18);
+  display:inline-block;
+  padding:2px 6px;
+  border-radius: 999px;
+}
+
+#pot {
+  position:absolute;
+  left:50%; top:62%;
+  transform:translateX(-50%);
+  background:rgba(0,0,0,0.45);
+  padding:6px 12px;
+  border-radius:14px;
+  font-weight:700;
+  color: gold;
+  z-index:45;
+  font-size: clamp(13px, 2.2vw, 18px);
+}
+
+#controls {
+  margin-top: 20px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+}
+
+#primaryActions {
+  display:flex;
+  gap:8px;
+  flex-wrap: wrap;
+  justify-content:center;
+}
+
+button.action {
+  padding:10px 14px;
+  border-radius:8px;
+  border:none;
+  background: rgba(255,255,255,0.08);
+  color:#fff;
+  cursor:pointer;
+  transition: transform .12s ease, background .12s;
+  font-size: clamp(12px, 1.8vw, 14px);
+}
+
+button.action:hover {
+  transform:translateY(-3px);
+  background: rgba(255,255,255,0.12);
+}
+
+.btn-primary {
+  background: linear-gradient(180deg,#ff7b2d,#e64a19);
+  color:#fff;
+  box-shadow: 0 6px 12px rgba(230,90,20,0.25);
+}
+
+.btn-secondary {
+  background: rgba(255,255,255,0.06);
+  color:#fff;
+}
+
+#betControls {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  background: var(--overlay);
+  padding:8px 12px;
+  border-radius:8px;
+}
+
+#betControls input[type=range] {
+  width: clamp(200px, 40vw, 320px);
+}
+
+#betAmount {
+  color: gold;
+  font-weight: 800;
+  font-size: clamp(12px, 2vw, 16px);
+}
+
+.hidden { display:none !important; }
+
+.deal-anim { animation: deal 420ms cubic-bezier(.2,.8,.2,1); }
+
+@keyframes deal {
+  0%   { transform: translateY(-60px) scale(.4) rotate(-10deg); opacity:0;}
+  60%  { transform: translateY(6px) scale(1.05) rotate(2deg); opacity:1;}
+  100% { transform: translateY(0) scale(1) rotate(0);}
+}
+
+.toAct .player-name { text-shadow: 0 0 10px rgba(255,255,255,.9); }
+
+.timer { font-size: 12px; margin-top: 4px; }
+
+/* Progress bar under acting player */
+.timerbar {
+  position: relative;
+  width: clamp(80px, 12vw, 140px);
+  height: 6px;
+  margin: 6px auto 0;
+  background: rgba(255,255,255,0.18);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.35);
+}
+
+.timerbar .fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #1ec8ff, #33ff8a);
+  transition: width .12s linear;
+}
+
+/* Mobile layout adjustments */
+@media (max-width: 768px){
+  #player1{ top:0%; left:-10%; }
+  #player2{ bottom:18%; left:-10%; }
+  #player4{ bottom:18%; right:-10%; }
+  #player5{ top:0%; right:-10%; }
+}
+
+.brand .logo {
+  height: 120px; /* adjust as needed */
+  width: auto;
+  display: block;
+}
+
+/* === Countdown Overlay === */
+#countdownOverlay {
+  position: fixed;
+  top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  font-size: clamp(28px, 6vw, 60px);
+  color: var(--accent);
+  font-weight: bold;
+  text-shadow: 0 0 20px black;
+}
+
+#countdownOverlay.hidden {
+  display: none;
+}
+
+#countdownText {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%   { transform: scale(1); opacity:1; }
+  50%  { transform: scale(1.2); opacity:0.8; }
+  100% { transform: scale(1); opacity:1; }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "pokerbros",
+  "version": "1.0.0",
+  "description": "Online Poker with Friends — Solana Phantom Wallet integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.6",
+    "@solana/web3.js": "^1.95.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "helmet": "^7.2.0",
+    "pokersolver": "^2.1.4",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
