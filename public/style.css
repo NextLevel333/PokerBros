@@ -77,14 +77,14 @@ header {
   width: clamp(48px, 7vw, 72px);
   height: clamp(72px, 10.5vw, 108px);
   border-radius:8px;
-  background:white;
+  background:rgb(255, 255, 255);
   display:flex;
   align-items:center;
   justify-content:center;
   box-shadow: 0 6px 10px rgba(0,0,0,0.6);
 }
 
-.card.back { background: linear-gradient(135deg,#2b2b90,#1a1a60); }
+.card.back { background: linear-gradient(135deg,#9945ff,#14f195); }
 
 .player-seat {
   position:absolute;
@@ -107,7 +107,7 @@ header {
 }
 
 .chips {
-  color: gold;
+  color: rgb(2, 160, 10);
   font-weight:700;
   text-shadow: 0 2px 6px rgba(0,0,0,0.6);
   font-size: clamp(12px, 1.8vw, 15px);
