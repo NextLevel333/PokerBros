@@ -13,7 +13,7 @@ const MAX_SEATS = 6;
 const SMALL_BLIND = 5;
 const BIG_BLIND = 10;
 const TURN_TIME_MS = 17000;       // per action, auto-fold on timeout
-const COUNTDOWN_SECONDS = 15;     // pre-hand countdown
+const COUNTDOWN_SECONDS = 3;     // pre-hand countdown
 
 // ====== TOKEN GATE CONFIG (Devnet) ======
 const TOKEN_GATE_ENABLED = false;
@@ -572,7 +572,7 @@ io.on('connection', socket=>{
         countdownInProgress = false;
         startHand();
       }
-    }, 500);
+    }, 1000);
   });
 
   // Player actions
