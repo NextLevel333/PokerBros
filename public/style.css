@@ -77,7 +77,7 @@ header {
   width: clamp(48px, 7vw, 72px);
   height: clamp(72px, 10.5vw, 108px);
   border-radius:8px;
-  background:rgb(255, 255, 255);
+  background:white;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -107,7 +107,7 @@ header {
 }
 
 .chips {
-  color: rgb(2, 160, 10);
+  color: gold;
   font-weight:700;
   text-shadow: 0 2px 6px rgba(0,0,0,0.6);
   font-size: clamp(12px, 1.8vw, 15px);
