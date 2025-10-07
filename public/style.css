@@ -283,14 +283,3 @@ button.action:hover {
   100% { transform: scale(1); opacity:1; }
 }
 
-.btn-action {
-  @apply px-5 py-2 rounded-lg text-sm font-bold text-white transition-transform duration-150 ease-out;
-  background: rgba(255,255,255,0.08);
-}
-.btn-action:hover {
-  transform: translateY(-2px);
-  background: rgba(255,255,255,0.15);
-}
-.btn-action.bg-amber-500:hover {
-  background-color: #f59e0b;
-}
