@@ -9,10 +9,10 @@ const { Hand } = require('pokersolver');
 const PORT = process.env.PORT || 3000;
 
 // ====== TABLE CONFIG ======
-const MAX_SEATS = 6;
-const SMALL_BLIND = 5;
-const BIG_BLIND = 10;
-const TURN_TIME_MS = 17000;       // per action, auto-fold on timeout
+const MAX_SEATS = 10;
+const SMALL_BLIND = 50;
+const BIG_BLIND = 100;
+const TURN_TIME_MS = 30000;       // per action, auto-fold on timeout
 const COUNTDOWN_SECONDS = 3;     // pre-hand countdown
 
 // ====== TOKEN GATE CONFIG (Devnet) ======
@@ -105,7 +105,7 @@ function resetTable(){
 
 function createDeck(){
   const suits = ['s','h','d','c']; // for pokersolver
-  const ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+  const ranks = ['2','3','4','5','6','7','8','9','T','J','Q','K','A'];
   const d=[];
   for(const r of ranks) for(const s of suits) d.push(r+s);
   return d;

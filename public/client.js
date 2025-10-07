@@ -169,9 +169,7 @@ function updateControls(){
 
 // === Cards (SVG) ===
 function createCardSVG(card){
-  // detect if rank has two chars (10)
-  const suit = card.slice(-1);
-  const rank = card.slice(0, card.length - 1);
+  const rank=card.slice(0,-1), suit=card.slice(-1);
   const color=(suit==='♥'||suit==='♦')?'#d22':'#111';
   const div=document.createElement('div');
   div.innerHTML=`<svg class="card" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
@@ -185,22 +183,9 @@ function createCardSVG(card){
 }
 function createCardBackSVG(){
   const d=document.createElement('div');
-  d.innerHTML=`
-    <svg class="card back" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="solanaGradient" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stop-color="#9945FF"/>
-          <stop offset="50%" stop-color="#19FB9B"/>
-          <stop offset="100%" stop-color="#00FFD1"/>
-        </linearGradient>
-      </defs>
-      <rect width="100%" height="100%" rx="16" ry="16" fill="url(#solanaGradient)" />
-      <rect x="12" y="12" width="176" height="276" rx="14" ry="14" stroke="#0b0b0b" stroke-width="6" fill="none" opacity="0.4"/>
-    </svg>
-  `;
+  d.innerHTML=`<svg class="card back" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2b2b90"/><stop offset="1" stop-color="#1a1a60"/></linearGradient></defs><rect width="100%" height="100%" rx="16" ry="16" fill="url(#bg)"/></svg>`;
   return d.firstChild;
 }
-
 function renderPlayerCards(playerId,cards){ const c=document.getElementById('cards'+playerId); if(!c) return; c.innerHTML=''; cards.forEach(card=>{ const el=createCardSVG(card); el.classList.add('deal-anim'); c.appendChild(el); }); }
 function renderHiddenCards(playerId){ const c=document.getElementById('cards'+playerId); if(!c) return; c.innerHTML=''; c.appendChild(createCardBackSVG()); c.appendChild(createCardBackSVG()); }
 function renderCommunity(cards){ const c=document.getElementById('community'); c.innerHTML=''; cards.forEach(card=>{ const el=createCardSVG(card); el.classList.add('deal-anim'); c.appendChild(el); }); }

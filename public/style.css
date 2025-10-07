@@ -84,7 +84,7 @@ header {
   box-shadow: 0 6px 10px rgba(0,0,0,0.6);
 }
 
-.card.back { background: linear-gradient(135deg,#9945ff,#14f195); }
+.card.back { background: linear-gradient(135deg,#2b2b90,#1a1a60); }
 
 .player-seat {
   position:absolute;
@@ -165,8 +165,8 @@ button.action {
   padding:10px 14px;
   border-radius:8px;
   border:none;
-  background: rgba(255,255,255,0.08);
-  color:#fff;
+  background: rgba(255, 255, 255, 0.797);
+  color:#000000;
   cursor:pointer;
   transition: transform .12s ease, background .12s;
   font-size: clamp(12px, 1.8vw, 14px);
@@ -174,7 +174,7 @@ button.action {
 
 button.action:hover {
   transform:translateY(-3px);
-  background: rgba(255,255,255,0.12);
+  background: rgba(198, 255, 175, 0.834);
 }
 
 .btn-primary {
@@ -236,7 +236,7 @@ button.action:hover {
 .timerbar .fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #1ec8ff, #33ff8a);
+  background: linear-gradient(90deg, #9945FF, #14F195);
   transition: width .12s linear;
 }
 
@@ -249,7 +249,7 @@ button.action:hover {
 }
 
 .brand .logo {
-  height: 120px; /* adjust as needed */
+  height: 100px; /* adjust as needed */
   width: auto;
   display: block;
 }
@@ -282,4 +282,3 @@ button.action:hover {
   50%  { transform: scale(1.2); opacity:0.8; }
   100% { transform: scale(1); opacity:1; }
 }
-
