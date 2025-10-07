@@ -16,12 +16,6 @@
       <div id="wallet-controls">
         <button id="connectWallet" class="btn-primary">Connect Wallet</button>
         <div id="walletStatus">Not connected</div>
-
-        <div id="escrowControls" class="row hidden">
-          <button id="depositBtn" class="action">Deposit</button>
-          <button id="withdrawBtn" class="action">Withdraw</button>
-          <div id="escrowInfo" class="escrow-info">(escrow: 0)</div>
-        </div>
       </div>
     </header>
 
@@ -60,6 +54,27 @@
           <div class="cards" id="cards5"></div>
           <div class="chips" id="chips5">0</div>
         </div>
+        <div class="player-seat" id="player6">
+          <div class="player-name">(…----)</div>
+          <div class="cards" id="cards6"></div>
+          <div class="chips" id="chips6">0</div>
+        </div>
+        <div class="player-seat" id="player7">
+          <div class="player-name">(…----)</div>
+          <div class="cards" id="cards7"></div>
+          <div class="chips" id="chips7">0</div>
+        </div>
+        <div class="player-seat" id="player8">
+          <div class="player-name">(…----)</div>
+          <div class="cards" id="cards8"></div>
+          <div class="chips" id="chips8">0</div>
+        </div>
+        <div class="player-seat" id="player9">
+          <div class="player-name">(…----)</div>
+          <div class="cards" id="cards9"></div>
+          <div class="chips" id="chips9">0</div>
+        </div>
+
 
         <!-- Community cards -->
         <div id="community"></div>
@@ -81,7 +96,7 @@
 
         <div id="betControls" class="hidden">
           <input type="range" id="betSlider" min="10" max="1000000" step="10" value="10">
-          <span id="betAmount">10</span>
+          <span id="betAmount">50</span>
           <button id="confirmBet" class="btn-primary">Confirm</button>
           <button id="cancelBet" class="btn-secondary">Cancel</button>
         </div>
