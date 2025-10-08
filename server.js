@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 const MAX_SEATS = 10;
 const SMALL_BLIND = 50;
 const BIG_BLIND = 100;
-const TURN_TIME_MS = 30000;       // per action, auto-fold on timeout
+const TURN_TIME_MS = 17000;       // per action, auto-fold on timeout
 const COUNTDOWN_SECONDS = 3;     // pre-hand countdown
 
 // ====== TOKEN GATE CONFIG (Devnet) ======

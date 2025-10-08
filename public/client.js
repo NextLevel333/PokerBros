@@ -183,7 +183,7 @@ function createCardSVG(card){
 }
 function createCardBackSVG(){
   const d=document.createElement('div');
-  d.innerHTML=`<svg class="card back" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2b2b90"/><stop offset="1" stop-color="#1a1a60"/></linearGradient></defs><rect width="100%" height="100%" rx="16" ry="16" fill="url(#bg)"/></svg>`;
+  d.innerHTML=`<svg class="card back" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6f00ffff"/><stop offset="1" stop-color="#00ffeeff"/></linearGradient></defs><rect width="100%" height="100%" rx="16" ry="16" fill="url(#bg)"/></svg>`;
   return d.firstChild;
 }
 function renderPlayerCards(playerId,cards){ const c=document.getElementById('cards'+playerId); if(!c) return; c.innerHTML=''; cards.forEach(card=>{ const el=createCardSVG(card); el.classList.add('deal-anim'); c.appendChild(el); }); }
@@ -192,14 +192,14 @@ function renderCommunity(cards){ const c=document.getElementById('community'); c
 
 // === Dealer / Turn UI ===
 function clearDealerHighlights(){
-  for(let i=0;i<6;i++){
+  for(let i=0;i<10;i++){
     const el=document.getElementById('player'+i);
     if(el){ el.classList.remove('toAct'); const old=el.querySelector('.dealer-badge'); if(old) old.remove(); stopBar(i); }
   }
 }
 function badge(idx,text){ const el=document.getElementById('player'+idx); if(!el) return; const b=document.createElement('div'); b.className='dealer-badge'; b.innerText=text; el.appendChild(b); }
 function indicateTurn(idx){
-  for(let i=0;i<6;i++){ const el=document.getElementById('player'+i); if(el) el.classList.remove('toAct'); }
+  for(let i=0;i<10;i++){ const el=document.getElementById('player'+i); if(el) el.classList.remove('toAct'); }
   const el=document.getElementById('player'+idx); if(el) el.classList.add('toAct');
 }
 
